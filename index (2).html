@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cuidando de você 3D - Fase 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3edf9;--ink:#3b2a4a;--card:#fff;--act:#2a9d8f;--actInk:#fff;--warn:#d64550;--bar:#e7deef;--sky:#efe6f8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1526;--ink:#f1e9fa;--card:#2b2038;--bar:#463a58;--sky:#2a1f38}}
+:root[data-theme="dark"]{--bg:#1d1526;--ink:#f1e9fa;--card:#2b2038;--bar:#463a58;--sky:#2a1f38}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Fredoka','Trebuchet MS',sans-serif;line-height:1.4}
+main{max-width:820px;margin:0 auto;padding:14px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+h1{font-size:1.35rem;margin:0}
+.stage{position:relative;height:min(52vh,420px);min-height:280px;margin:10px 0;border-radius:16px;overflow:hidden;background:var(--sky);touch-action:none}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+.bubble{position:absolute;top:10px;left:10px;max-width:60%;background:var(--card);border-radius:14px;padding:8px 12px;font-size:.95rem}
+.hint{position:absolute;bottom:8px;right:12px;font-size:.8rem;opacity:.7}
+.bars{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px}
+.bar{background:var(--card);border-radius:12px;padding:6px 10px}
+.bar span{display:flex;justify-content:space-between;font-size:.88rem}
+.track{height:9px;background:var(--bar);border-radius:6px;margin-top:3px;overflow:hidden}
+.fill{height:100%;width:50%;background:var(--act);transition:width .4s,background .3s}
+.fill.low{background:var(--warn)}
+.rec .fill{background:#8a5fd1}
+.actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+button{font:inherit;font-weight:600;padding:13px 10px;border:0;border-radius:12px;background:var(--act);color:var(--actInk);cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.log{margin-top:10px;min-height:1.4em;font-size:.95rem}
+.overlay{position:fixed;inset:0;background:rgba(20,10,30,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:5}
+.overlay.on{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:16px;width:100%;max-width:420px;text-align:center}
+.leg{position:relative;height:180px;background:var(--bar);border-radius:12px;margin:12px 0;overflow:hidden}
+.leg .limb{position:absolute;inset:40px 20px;background:#f2c7a5;border-radius:40px}
+.wound{position:absolute;width:44px;height:44px;padding:0;border-radius:50%;background:var(--warn);font-size:1.3rem}
+.tleft{height:8px;background:var(--bar);border-radius:5px;overflow:hidden}
+.tleft i{display:block;height:100%;background:var(--act);width:100%}
+.end button{margin-top:12px}
+.arena{position:relative;height:260px;background:var(--bar);border-radius:12px;margin:12px 0;overflow:hidden}
+.me{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:2.4rem}
+.mon{position:absolute;width:44px;height:44px;padding:0;font-size:1.5rem;background:var(--warn);border-radius:50%}
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Cuidando de você</h1><div>Pontos: <b id="pts">0</b></div></header>
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="Casa em 3D"></canvas>
+    <div class="bubble" id="bubble">Ai... minha perna dói.</div>
+    <div class="hint">Arraste para girar a casa</div>
+  </div>
+  <div class="bars" id="bars"></div>
+  <div class="actions">
+    <button id="bFood">Cozinhar e servir</button>
+    <button id="bMed">Dar remédio</button>
+    <button id="bDress">Trocar curativo</button>
+    <button id="bLove">Fazer companhia</button>
+    <button id="bDoc" hidden>Levar ao médico</button>
+  </div>
+  <div class="log" id="log" aria-live="polite"></div>
+</main>
+
+<div class="overlay" id="ovDress"><div class="modal"><strong>Troque o curativo</strong>
+  <p style="margin:4px 0">Toque nos 3 curativos antes do tempo acabar.</p>
+  <div class="leg" id="leg"><div class="limb"></div></div><div class="tleft"><i id="tl"></i></div></div></div>
+<div class="overlay" id="ovCity"><div class="modal"><strong>A caminho do médico</strong>
+  <p style="margin:4px 0">Toque nos monstros antes que cheguem nela.</p>
+  <div class="arena" id="arena"><span class="me">♿</span></div><div class="tleft"><i id="tp" style="width:0"></i></div></div></div>
+<div class="overlay" id="ovEnd"><div class="modal end"><h2 id="endT"></h2><p id="endP"></p><button id="again">Jogar de novo</button></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ---------- cena 3D ---------- */
+const stage=document.getElementById("stage"),cv=document.getElementById("c");
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,1,0.1,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0x8877aa,0.85));
+const sun=new THREE.DirectionalLight(0xffffff,0.6);sun.position.set(6,12,8);sun.castShadow=true;
+sun.shadow.camera.left=-10;sun.shadow.camera.right=10;sun.shadow.camera.top=10;sun.shadow.camera.bottom=-10;scene.add(sun);
+
+function box(w,h,d,color,x,y,z,parent){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));
+  m.position.set(x,y+h/2,z);m.castShadow=true;m.receiveShadow=true;(parent||scene).add(m);return m;
+}
+// piso e paredes (corte: só fundo e lado esquerdo)
+box(12,0.2,8,0xd9b48f,0,-0.2,0);
+box(6,0.02,8,0xc9a07a,-3,0,0);          // quarto
+box(6,0.02,8,0xe8dccb,3,0,0);           // cozinha e sala
+box(12,3.2,0.2,0xe4d8f2,0,0,-4.1);      // parede de fundo
+box(0.2,3.2,8,0xd8cbea,-6.1,0,0);       // parede esquerda
+box(0.15,2.2,0.2,0x8a6a4a,0,0,-3.9);    // batente
+box(1.6,1.2,0.1,0x9fd3ee,-3.8,1.4,-3.98); // janela
+box(1.8,0.02,2.8,0xf3b6c6,-3.5,0.02,0.6);   // tapete rosa
+// quarto
+box(2.4,0.5,3.6,0x8b5e3c,-3.6,0,-2);       // cama base
+box(2.2,0.3,3.2,0xffffff,-3.6,0.5,-2);     // colchão
+box(2.2,0.15,1.6,0xb9a3e3,-3.6,0.8,-1.2);  // coberta
+box(1.4,0.18,0.6,0xffffff,-3.6,0.8,-3.4);  // travesseiro
+box(0.8,0.7,0.8,0x8b5e3c,-1.6,0,-3.5);     // criado-mudo
+box(0.3,0.25,0.3,0xffd166,-1.6,0.7,-3.5);  // abajur
+box(1.4,2.2,0.8,0x8b5e3c,-5.4,0,-3.5);     // guarda-roupa
+// cozinha
+box(4,0.9,0.9,0x9bb7c9,3.2,0,-3.5);        // balcão
+box(4,0.08,1,0xffffff,3.2,0.9,-3.5);
+box(1.1,2.1,0.9,0xeeeeee,5.3,0,-3.5);      // geladeira
+box(0.6,0.05,0.6,0x333333,2.6,0.98,-3.5);  // fogão
+box(1.6,0.7,1.6,0xc19a6b,3,0,-0.8);        // mesa
+// sala
+box(1.1,0.5,2.6,0x5b8def,2.2,0,1.6);       // sofá
+box(0.4,0.9,2.6,0x4a78d6,1.7,0,1.6);
+box(0.4,0.8,1.8,0x333333,5.5,0,1.6);       // rack
+box(0.15,0.9,1.5,0x111827,5.5,0.8,1.6);    // TV
+
+box(60,0.2,26,0xa9d18e,36,-0.2,0);
+box(60,0.06,5,0x555a66,36,0,3.4);
+box(60,0.1,0.9,0xcfcfd6,36,0,0.45);
+[[10,3.5,0xd6a5a5],[14.5,5,0xa5c4d6],[19,4,0xd6cfa5],[23.5,6,0xb8a5d6]].forEach(([x,h,c])=>box(3.6,h,2.6,c,x,0,-1.3));
+[12.3,16.8,21.2,26].forEach(x=>{box(0.3,1.2,0.3,0x8b5e3c,x,0,0.5);box(1.4,1.4,1.4,0x5aa05a,x,1.2,0.5)});
+box(6,5,3,0xf6f6f6,31.5,0,-1.5);
+box(1.6,1.6,0.12,0xffffff,31.5,3,0.05);box(1.2,0.3,0.14,0xd64550,31.5,3.65,0.08);box(0.3,1.2,0.14,0xd64550,31.5,3.2,0.08);
+box(1.3,2.1,0.12,0x3b6ea5,29.5,0,0.06);
+function person(skin,cloth,hair,pants){
+  const g=new THREE.Group();
+  box(0.6,0.7,0.35,cloth,0,0.7,0,g);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.28,16,12),new THREE.MeshLambertMaterial({color:skin}));
+  head.position.y=1.72;head.castShadow=true;g.add(head);
+  box(0.6,0.22,0.6,hair,0,1.78,-0.03,g);
+  const l=box(0.22,0.7,0.24,pants,-0.15,0,0,g),r=box(0.22,0.7,0.24,pants,0.15,0,0,g);
+  l.geometry.translate(0,0.35,0);r.geometry.translate(0,0.35,0);l.position.y=0.7;r.position.y=0.7;
+  const eyes=[-0.1,0.1].map(x=>{const e=new THREE.Mesh(new THREE.SphereGeometry(0.04,8,6),new THREE.MeshBasicMaterial({color:0x222222}));e.position.set(x,1.75,0.26);g.add(e);return e});
+  g.userData={l,r,head};return g;
+}
+const boy=person(0xf2c7a5,0x2a9d8f,0x3a2a20,0x3b4a6b);
+boy.position.set(-1.2,0,-0.6);scene.add(boy);
+// namorada deitada na cama, com faixa na cabeça e gesso na perna
+const girl=person(0xf2c7a5,0xf28ab2,0x5a2e2e,0xf28ab2);
+girl.rotation.x=-Math.PI/2;girl.position.set(-3.6,1.15,-1.9);scene.add(girl);
+box(0.66,0.14,0.62,0xffffff,0,1.76,0,girl);   // faixa
+box(0.26,0.55,0.28,0xffffff,0.15,0.05,0,girl); // gesso
+
+/* ---------- câmera orbital ---------- */
+let theta=0.3,radius=17,drag=null,tx=0;
+function placeCam(){camera.position.set(tx+Math.sin(theta)*radius,radius*0.75,Math.cos(theta)*radius);camera.lookAt(tx,0.5,0)}
+cv.addEventListener("pointerdown",e=>{drag=e.clientX;cv.setPointerCapture(e.pointerId)});
+cv.addEventListener("pointermove",e=>{if(drag===null)return;theta=Math.max(-1.2,Math.min(1.2,theta-(e.clientX-drag)*0.008));drag=e.clientX;placeCam()});
+cv.addEventListener("pointerup",()=>drag=null);
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;
+  radius=w<520?22:17;camera.updateProjectionMatrix();placeCam()}
+new ResizeObserver(resize).observe(stage);resize();
+
+/* ---------- movimento do namorado ---------- */
+let path=[],onDone=null,walking=false,t0=0;
+function go(points,done){path=points.map(p=>new THREE.Vector3(p[0],0,p[1]));onDone=done;walking=true;render()}
+const P={cozinha:[3,-2.6],criado:[-2.4,-2.9],lado:[-1.5,-0.8],sofa:[3.3,1.6]};
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.05,(now-t0)/1000||0.016);t0=now;
+  if(walking&&path.length){
+    const d=path[0].clone().sub(boy.position);d.y=0;const dist=d.length();
+    if(dist<0.08){path.shift();if(!path.length){walking=false;boy.userData.l.rotation.x=boy.userData.r.rotation.x=0;const f=onDone;onDone=null;f&&f()}}
+    else{d.normalize();boy.position.addScaledVector(d,(pushing?2.6:4)*dt);boy.rotation.y=Math.atan2(d.x,d.z);
+      const s=Math.sin(now/90)*0.7;boy.userData.l.rotation.x=s;boy.userData.r.rotation.x=-s}
+  }
+  update(dt,now);
+  renderer.render(scene,camera);
+}
+
+/* ---------- jogo ---------- */
+const NEEDS=[["fome","Fome"],["remedio","Remédio"],["curativo","Curativo"],["humor","Humor"]];
+let S,timer,paused=false;
+const $=id=>document.getElementById(id);
+NEEDS.forEach(([k,n])=>$("bars").insertAdjacentHTML("beforeend",`<div class="bar"><span>${n}<b id="v_${k}"></b></span><div class="track"><div class="fill" id="f_${k}"></div></div></div>`));
+$("bars").insertAdjacentHTML("beforeend",`<div class="bar rec"><span>Recuperação<b id="v_rec"></b></span><div class="track"><div class="fill" id="f_rec"></div></div></div>`);
+const clamp=v=>Math.max(0,Math.min(100,v));
+$("bars").insertAdjacentHTML("beforeend",`<div class="bar"><span>Vida<b id="v_vida"></b></span><div class="track"><div class="fill" id="f_vida"></div></div></div>`);
+const say=t=>$("bubble").textContent=t, log=t=>$("log").textContent=t;
+
+function start(){
+  S={fome:60,remedio:60,curativo:60,humor:60,rec:15,vida:100,pts:0,cd:{}};
+  boy.position.set(-1.2,0,-0.6);paused=false;walking=false;path=[];nextPhase=false;setPhase(1);
+  $("ovEnd").classList.remove("on");say("Ai... minha perna dói.");log("O dia começou. Cuide dela!");
+  clearInterval(timer);timer=setInterval(tick,1000);render();
+}
+function tick(){
+  if(paused)return;
+  S.fome=clamp(S.fome-1.3);S.remedio=clamp(S.remedio-1);S.curativo=clamp(S.curativo-0.8);S.humor=clamp(S.humor-0.9);
+  const zeros=NEEDS.filter(([k])=>S[k]<=0).length,allOk=NEEDS.every(([k])=>S[k]>30);
+  if(zeros)S.rec=clamp(S.rec-1.5*zeros);else S.rec=clamp(S.rec+(allOk?0.9:0.3));
+  for(const k in S.cd)if(S.cd[k]>0)S.cd[k]--;
+  if(!trip)S.vida=clamp(S.vida+2);
+  mood();render();
+  if(S.phase!==2&&S.rec>=100)finish(true);else if(S.rec<=0)finish(false);
+}
+function mood(){
+  const low=NEEDS.find(([k])=>S[k]<25);
+  const t={fome:"Estou com tanta fome...",remedio:"Preciso do meu remédio.",curativo:"O curativo está incomodando.",humor:"Fiquei tão sozinha..."};
+  say(low?t[low[0]]:S.rec>60?"Estou me sentindo melhor!":"Obrigada por cuidar de mim.");
+}
+function render(){
+  NEEDS.forEach(([k])=>{const v=Math.round(S[k]);$("v_"+k).textContent=v+"%";const f=$("f_"+k);f.style.width=v+"%";f.classList.toggle("low",v<25)});
+  $("v_rec").textContent=Math.round(S.rec)+"%";$("f_rec").style.width=S.rec+"%";$("pts").textContent=S.pts;const vd=Math.round(S.vida);$("v_vida").textContent=vd+"%";$("f_vida").style.width=vd+"%";$("f_vida").classList.toggle("low",vd<30);
+  const b=(id,k)=>$(id).disabled=walking||S.cd[k]>0;b("bFood","food");b("bMed","med");b("bLove","love");b("bDress","dress");b("bDoc","doc");$("bDoc").textContent="Levar ao médico ("+(S.trips||0)+"/3)";
+}
+$("bFood").onclick=()=>{if(S.fome>80){log("Ela ainda não está com fome.");return}
+  log("Indo cozinhar...");go([P.cozinha,P.lado],()=>{S.fome=clamp(S.fome+40);S.humor=clamp(S.humor+5);S.pts+=10;S.cd.food=4;log("Ela comeu tudo. +10 pontos.");render()})};
+$("bMed").onclick=()=>{if(S.remedio>65){log("Ainda não é hora do remédio.");return}
+  log("Pegando o remédio...");go([P.criado,P.lado],()=>{S.remedio=clamp(S.remedio+45);S.pts+=15;S.cd.med=5;log("Remédio no horário certo. +15 pontos.");render()})};
+$("bLove").onclick=()=>{log("Ligando a TV...");go([P.sofa,P.lado],()=>{S.humor=clamp(S.humor+30);S.pts+=5;S.cd.love=3;log("Vocês assistiram a um filme juntos. +5 pontos.");render()})};
+$("bDress").onclick=()=>{if(S.curativo>70){log("O curativo ainda está limpo.");return}go([P.lado],openDress)};
+
+function openDress(){
+  paused=true;const leg=$("leg");leg.querySelectorAll(".wound").forEach(w=>w.remove());
+  let left=3,t=100;$("ovDress").classList.add("on");
+  for(let i=0;i<3;i++){
+    const w=document.createElement("button");w.className="wound";w.textContent="🩹";w.setAttribute("aria-label","Curativo");
+    w.style.left=(12+Math.random()*70)+"%";w.style.top=(20+Math.random()*55)+"%";
+    w.onclick=()=>{w.remove();if(--left===0)end(true)};leg.appendChild(w);
+  }
+  const iv=setInterval(()=>{t-=2;$("tl").style.width=t+"%";if(t<=0)end(false)},100);
+  function end(ok){clearInterval(iv);$("ovDress").classList.remove("on");paused=false;S.cd.dress=6;
+    if(ok){S.curativo=100;S.pts+=20;log("Curativo trocado com cuidado. +20 pontos.")}else{S.curativo=clamp(S.curativo+30);log("Foi meio às pressas. O curativo melhorou só um pouco.")}
+    render()}
+}
+function finish(win){
+  clearInterval(timer);
+  resetTrip();const p2=S.phase===2;nextPhase=win&&!p2;
+  $("endT").textContent=win?(p2?"Fase 2 concluída!":"Fase 1 concluída!"):(S.vida<=0?"Ela foi ferida demais":"A recuperação parou");
+  $("endP").textContent=win?(p2?`Ela já dá os primeiros passos com apoio. Pontos: ${S.pts}. Próxima fase: fisioterapia.`:`Ela já consegue sentar na cadeira de rodas. Pontos: ${S.pts}. Próxima fase: ir ao médico pela cidade.`):(S.vida<=0?"Os zumbis chegaram perto demais. Derrube-os antes que encostem nela.":"As necessidades ficaram sem cuidado por muito tempo. Tente de novo.");
+  $("again").textContent=nextPhase?"Ir para a fase 2":"Jogar de novo";
+  $("ovEnd").classList.add("on");
+}
+let nextPhase=false;
+$("again").onclick=()=>nextPhase?startPhase2():start();
+
+/* ---------- fase 2: cadeira de rodas, médico e monstros ---------- */
+const rider=new THREE.Group();scene.add(rider);rider.visible=false;
+box(0.8,0.1,0.8,0x555b6e,0,0.55,0,rider);box(0.8,0.7,0.1,0x555b6e,0,0.65,-0.35,rider);
+[-0.5,0.5].forEach(dx=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.08,16),new THREE.MeshLambertMaterial({color:0x222222}));
+  w.rotation.z=Math.PI/2;w.position.set(dx,0.4,0);w.castShadow=true;rider.add(w)});
+let trip=false,pushing=false,zt=0,rt=0;const zombies=[];
+function resetTrip(){trip=false;pushing=false;walking=false;path=[];zombies.forEach(z=>scene.remove(z.g));zombies.length=0}
+function setPhase(n){
+  resetTrip();S.phase=n;$("bDoc").hidden=n!==2;rider.visible=n===2;
+  if(n===2){rider.add(girl);girl.rotation.set(0,0,0);girl.position.set(0,-0.05,0);rider.position.set(-1.6,0,0.4);rider.rotation.y=Math.PI}
+  else{scene.add(girl);girl.rotation.set(-Math.PI/2,0,0);girl.position.set(-3.6,1.15,-1.9)}
+}
+function spawnZombie(){
+  const g=person(0x86b06b,0x6b6f4a,0x2a2a1f,0x3a3a50);
+  [-0.38,0.38].forEach(x=>box(0.16,0.16,0.7,0x86b06b,x,1.05,0.4,g));
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(1.4,2.4,1.4),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=1.1;g.add(hit);
+  const side=Math.random()<0.5?-1:1;
+  g.position.set(Math.min(30,Math.max(8,rider.position.x+side*(6+Math.random()*4))),0,1+Math.random()*4.6);
+  scene.add(g);zombies.push({g,hit,dead:0});
+}
+function update(dt,now){
+  if(trip){rt-=dt;if(rt<=0){rt=0.25;render()}}
+  if(pushing){const f=boy.rotation.y;rider.rotation.y=f;rider.position.set(boy.position.x+Math.sin(f)*0.95,0,boy.position.z+Math.cos(f)*0.95)}
+  if(trip&&pushing&&rider.position.x>7){zt-=dt;if(zt<=0&&zombies.filter(z=>!z.dead).length<4){spawnZombie();zt=1.6+Math.random()}}
+  for(const z of zombies.slice()){
+    if(z.dead){z.dead+=dt;z.g.rotation.x=-Math.min(1,z.dead*3)*Math.PI/2;if(z.dead>0.9){scene.remove(z.g);zombies.splice(zombies.indexOf(z),1)}continue}
+    const dx=rider.position.x-z.g.position.x,dz=rider.position.z-z.g.position.z,d=Math.hypot(dx,dz);
+    if(d<2.6)S.vida=clamp(S.vida-6*dt);
+    if(d<1.15){scene.remove(z.g);zombies.splice(zombies.indexOf(z),1);S.vida=clamp(S.vida-12);S.humor=clamp(S.humor-8);S.rec=clamp(S.rec-5);say("Aaai!");log("Um zumbi encostou nela! Toque neles antes que cheguem perto.");render();continue}
+    z.g.position.x+=dx/d*1.5*dt;z.g.position.z+=dz/d*1.5*dt;z.g.rotation.y=Math.atan2(dx,dz);
+    const sw=Math.sin(now/160)*0.6;z.g.userData.l.rotation.x=sw;z.g.userData.r.rotation.x=-sw;
+  }
+  if(trip&&S.vida<=0){render();finish(false);return}
+  tx+=((trip?boy.position.x:0)-tx)*Math.min(1,dt*3);placeCam();
+}
+const ray=new THREE.Raycaster(),mv=new THREE.Vector2();let dx0=0,dy0=0;
+cv.addEventListener("pointerdown",e=>{dx0=e.clientX;dy0=e.clientY});
+cv.addEventListener("pointerup",e=>{
+  if(!trip||Math.hypot(e.clientX-dx0,e.clientY-dy0)>6)return;
+  const r=cv.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));
+  ray.setFromCamera(mv,camera);
+  const hit=ray.intersectObjects(zombies.filter(z=>!z.dead).map(z=>z.hit))[0];
+  if(hit){const z=zombies.find(z=>z.hit===hit.object);z.dead=0.001;S.pts+=3;$("pts").textContent=S.pts}
+});
+function startPhase2(){
+  S.cd={};S.vida=100;S.fome=S.remedio=S.curativo=S.humor=70;S.rec=50;S.trips=0;setPhase(2);nextPhase=false;
+  boy.position.set(-0.4,0,1.4);paused=false;$("ovEnd").classList.remove("on");
+  say("Vamos passear?");log("Fase 2: leve-a ao médico 3 vezes e defenda-a dos monstros.");
+  clearInterval(timer);timer=setInterval(tick,1000);render();
+}
+$("bDoc").onclick=()=>{
+  trip=true;zt=1;say("Vamos ao médico!");log("Vocês saíram de casa. Toque nos zumbis para defendê-la.");
+  go([[-1.6,-0.5]],()=>{pushing=true;go([[-1.6,3.4],[8,3.4],[29.5,3.4],[29.5,1.8]],arrive)});
+};
+function arrive(){
+  pushing=false;zombies.forEach(z=>scene.remove(z.g));zombies.length=0;log("Chegaram à clínica. Consulta em andamento...");
+  setTimeout(()=>{
+    if(!trip)return;trip=false;
+    S.trips++;S.pts+=40;S.rec=clamp(S.rec+15);S.curativo=100;S.vida=clamp(S.vida+30);S.cd.doc=8;
+    boy.position.set(-1.6,0,-0.5);rider.position.set(-1.6,0,0.4);rider.rotation.y=Math.PI;
+    log(`Consulta ${S.trips}/3 concluída. Voltaram para casa. +40 pontos.`);render();
+    if(S.rec<=0)finish(false);else if(S.trips>=3)finish(true);
+  },2000);
+}
+start();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
